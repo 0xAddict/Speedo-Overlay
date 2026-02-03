@@ -1,0 +1,5 @@
+{
+  "name": "Cyberpunk Twitch HUD",
+  "description": "A seamless, glass-morphic cyberpunk overlay for Twitch streams featuring velocity, stats, and goals.",
+  "requestFramePermissions": []
+}
