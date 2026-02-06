@@ -4,6 +4,7 @@ import { GoalBar } from './components/GoalBar';
 import { RotaryFeed, FeedItemData } from './components/RotaryFeed';
 import { MapOverlay } from './components/MapOverlay';
 import { MapBox } from './components/MapBox';
+import { SocialBanner } from './components/SocialBanner'; // Import new component
 import { 
   Box, 
   TrendingUp, 
@@ -21,6 +22,7 @@ const App = () => {
   const params = new URLSearchParams(window.location.search);
   const isMapOverlay = params.get('overlay') === 'map';
   const isMapBox = params.get('overlay') === 'mapbox';
+  const isSocialBanner = params.get('overlay') === 'social';
 
   // Simulating live data
   const [time, setTime] = useState(new Date());
@@ -46,7 +48,7 @@ const App = () => {
 
   useEffect(() => {
     // Only run main app simulation if we are NOT in an overlay mode that handles its own data
-    if (isMapOverlay || isMapBox) return;
+    if (isMapOverlay || isMapBox || isSocialBanner) return;
 
     // Clock interval
     const timer = setInterval(() => setTime(new Date()), 1000);
@@ -85,7 +87,7 @@ const App = () => {
       clearInterval(navInterval);
       clearInterval(eventInterval);
     };
-  }, [isMapOverlay, isMapBox]);
+  }, [isMapOverlay, isMapBox, isSocialBanner]);
 
   // RENDER OVERLAYS IF REQUESTED
   if (isMapOverlay) {
@@ -94,6 +96,10 @@ const App = () => {
 
   if (isMapBox) {
     return <MapBox />;
+  }
+
+  if (isSocialBanner) {
+    return <SocialBanner />;
   }
 
   const formatTime = (date: Date) => {
@@ -203,9 +209,14 @@ const App = () => {
                     />
                 </div>
             </div>
-
         </div>
       </div>
+
+      {/* Social Banner - Integrated into Main View (Bottom Right) */}
+      <div className="absolute bottom-10 right-10 z-10 transform scale-90 origin-bottom-right">
+         <SocialBanner standalone={false} />
+      </div>
+
     </div>
   );
 };
