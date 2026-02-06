@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { SpeedGauge } from './components/SpeedGauge';
+import { CyberMap } from './components/CyberMap';
 import { GoalBar } from './components/GoalBar';
 import { RotaryFeed, FeedItemData } from './components/RotaryFeed';
+import { MapOverlay } from './components/MapOverlay';
+import { MapBox } from './components/MapBox';
 import { 
   Box, 
   TrendingUp, 
@@ -15,10 +17,24 @@ import {
 } from 'lucide-react';
 
 const App = () => {
+  // ROUTING LOGIC: Check for query params
+  const params = new URLSearchParams(window.location.search);
+  const isMapOverlay = params.get('overlay') === 'map';
+  const isMapBox = params.get('overlay') === 'mapbox';
+
   // Simulating live data
-  const [speed, setSpeed] = useState(0);
   const [time, setTime] = useState(new Date());
   
+  // Navigation State
+  const [heading, setHeading] = useState(0);
+  // Helsinki Coordinates
+  const location = {
+      lat: 60.1699,
+      lng: 24.9384,
+      city: "NEO-HELSINKI",
+      sector: "KAMPI_DISTRICT"
+  };
+
   // State for Events (Data Stream)
   const [events, setEvents] = useState<FeedItemData[]>([
     { id: '1', icon: <Heart size={20} />, text: 'Neon_Rider', highlight: 'New Follower' },
@@ -29,17 +45,16 @@ const App = () => {
   ]);
 
   useEffect(() => {
+    // Only run main app simulation if we are NOT in an overlay mode that handles its own data
+    if (isMapOverlay || isMapBox) return;
+
     // Clock interval
     const timer = setInterval(() => setTime(new Date()), 1000);
     
-    // Fake speed simulation
-    const speedInterval = setInterval(() => {
-      setSpeed(prev => {
-        const change = Math.floor(Math.random() * 10) - 4; // fluctuates
-        const newSpeed = prev + change;
-        return newSpeed < 0 ? 0 : newSpeed > 99 ? 99 : newSpeed;
-      });
-    }, 800);
+    // Simulate Heading Rotation (Player turning around)
+    const navInterval = setInterval(() => {
+        setHeading(prev => (prev + 0.5) % 360);
+    }, 50);
 
     // EVENT SIMULATION (Replacing the fetch)
     const eventInterval = setInterval(() => {
@@ -67,25 +82,22 @@ const App = () => {
 
     return () => {
       clearInterval(timer);
-      clearInterval(speedInterval);
+      clearInterval(navInterval);
       clearInterval(eventInterval);
     };
-  }, []);
+  }, [isMapOverlay, isMapBox]);
+
+  // RENDER OVERLAYS IF REQUESTED
+  if (isMapOverlay) {
+    return <MapOverlay />;
+  }
+
+  if (isMapBox) {
+    return <MapBox />;
+  }
 
   const formatTime = (date: Date) => {
     return date.toLocaleTimeString('en-GB', { hour12: false });
-  };
-
-  // Static Data for SpeedGauge Callouts
-  const weatherData = {
-      temp: "11°C",
-      condition: "ACID RAIN",
-      wind: "2 M/S"
-  };
-
-  const locationData = {
-      city: "NEO-HELSINKI",
-      sector: "SECTOR 4"
   };
 
   return (
@@ -123,14 +135,14 @@ const App = () => {
                </div>
             </div>
 
-            {/* SECTION 1: VELOCITY & ENV DATA */}
+            {/* SECTION 1: CYBER MINIMAP */}
             <div className="border-b border-white/5 pb-1 relative flex-shrink-0">
                 {/* Subtle cyber background grid for this section */}
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_rgba(6,182,212,0.1)_0%,_transparent_70%)] pointer-events-none"></div>
-                <SpeedGauge 
-                    speed={speed} 
-                    weather={weatherData}
-                    location={locationData}
+                
+                <CyberMap 
+                    heading={heading}
+                    location={location}
                 />
             </div>
 
