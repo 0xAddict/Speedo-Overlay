@@ -1,21 +1,42 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { CyberMap } from './components/CyberMap';
 import { GoalBar } from './components/GoalBar';
 import { RotaryFeed, FeedItemData } from './components/RotaryFeed';
 import { MapOverlay } from './components/MapOverlay';
 import { MapBox } from './components/MapBox';
 import { SocialBanner } from './components/SocialBanner'; // Import new component
-import { 
-  Box, 
-  TrendingUp, 
-  Clock, 
+import { SpeedGauge } from './components/SpeedGauge';
+import {
+  Box,
+  TrendingUp,
+  Clock,
   User,
   Heart,
   Zap,
   Coins,
   MessageSquare,
-  Users
+  Users,
+  Route
 } from 'lucide-react';
+
+// Haversine formula: calculates distance in km between two GPS coordinates
+function haversineDistance(
+  lat1: number, lon1: number,
+  lat2: number, lon2: number
+): number {
+  const R = 6371; // Earth's radius in km
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) *
+    Math.cos(lat2 * (Math.PI / 180)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+const TOTAL_KM_STORAGE_KEY = 'speedo-overlay-total-km';
 
 const App = () => {
   // ROUTING LOGIC: Check for query params
@@ -23,19 +44,30 @@ const App = () => {
   const isMapOverlay = params.get('overlay') === 'map';
   const isMapBox = params.get('overlay') === 'mapbox';
   const isSocialBanner = params.get('overlay') === 'social';
+  const isSpeedOverlay = params.get('overlay') === 'speedo';
 
   // Simulating live data
   const [time, setTime] = useState(new Date());
-  
+
   // Navigation State
   const [heading, setHeading] = useState(0);
-  // Helsinki Coordinates
-  const location = {
+
+  // GPS State
+  const [gpsActive, setGpsActive] = useState(false);
+  const [speed, setSpeed] = useState(0); // km/h
+  const [totalKm, setTotalKm] = useState(() => {
+    const saved = localStorage.getItem(TOTAL_KM_STORAGE_KEY);
+    return saved ? parseFloat(saved) : 0;
+  });
+  const lastPosition = useRef<{ lat: number; lng: number } | null>(null);
+
+  // Location: starts with Helsinki defaults, updated by GPS when available
+  const [location, setLocation] = useState({
       lat: 60.1699,
       lng: 24.9384,
       city: "NEO-HELSINKI",
       sector: "KAMPI_DISTRICT"
-  };
+  });
 
   // State for Events (Data Stream)
   const [events, setEvents] = useState<FeedItemData[]>([
@@ -48,15 +80,18 @@ const App = () => {
 
   useEffect(() => {
     // Only run main app simulation if we are NOT in an overlay mode that handles its own data
-    if (isMapOverlay || isMapBox || isSocialBanner) return;
+    if (isMapOverlay || isMapBox || isSocialBanner || isSpeedOverlay) return;
 
     // Clock interval
     const timer = setInterval(() => setTime(new Date()), 1000);
-    
-    // Simulate Heading Rotation (Player turning around)
-    const navInterval = setInterval(() => {
-        setHeading(prev => (prev + 0.5) % 360);
-    }, 50);
+
+    // Simulate Heading Rotation only when GPS is not providing real heading
+    let navInterval: ReturnType<typeof setInterval> | undefined;
+    if (!gpsActive) {
+      navInterval = setInterval(() => {
+          setHeading(prev => (prev + 0.5) % 360);
+      }, 50);
+    }
 
     // EVENT SIMULATION (Replacing the fetch)
     const eventInterval = setInterval(() => {
@@ -84,10 +119,73 @@ const App = () => {
 
     return () => {
       clearInterval(timer);
-      clearInterval(navInterval);
+      if (navInterval) clearInterval(navInterval);
       clearInterval(eventInterval);
     };
-  }, [isMapOverlay, isMapBox, isSocialBanner]);
+  }, [isMapOverlay, isMapBox, isSocialBanner, isSpeedOverlay, gpsActive]);
+
+  // GPS Tracking: real position, speed, heading, and distance accumulation
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        const { latitude, longitude, speed: gpsSpeed, heading: gpsHeading } = pos.coords;
+
+        // Update location with real coordinates
+        setLocation(prev => ({
+          ...prev,
+          lat: latitude,
+          lng: longitude,
+        }));
+
+        // Update speed (GPS gives m/s, convert to km/h)
+        if (gpsSpeed != null && gpsSpeed >= 0) {
+          setSpeed(Math.round(gpsSpeed * 3.6));
+        }
+
+        // Update heading from GPS if available
+        if (gpsHeading != null && !isNaN(gpsHeading)) {
+          setHeading(gpsHeading);
+        }
+
+        // Calculate distance from last position
+        if (lastPosition.current) {
+          const dist = haversineDistance(
+            lastPosition.current.lat, lastPosition.current.lng,
+            latitude, longitude
+          );
+          // Only count movement > 5 meters to filter GPS jitter
+          if (dist > 0.005) {
+            setTotalKm(prev => {
+              const updated = prev + dist;
+              localStorage.setItem(TOTAL_KM_STORAGE_KEY, updated.toFixed(3));
+              return updated;
+            });
+          }
+        }
+
+        lastPosition.current = { lat: latitude, lng: longitude };
+        setGpsActive(true);
+      },
+      (err) => {
+        console.warn('GPS error:', err.message);
+        setGpsActive(false);
+      },
+      {
+        enableHighAccuracy: true,
+        maximumAge: 2000,
+        timeout: 10000,
+      }
+    );
+
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, []);
+
+  // Persist totalKm to localStorage on change
+  useEffect(() => {
+    localStorage.setItem(TOTAL_KM_STORAGE_KEY, totalKm.toFixed(3));
+  }, [totalKm]);
 
   // RENDER OVERLAYS IF REQUESTED
   if (isMapOverlay) {
@@ -100,6 +198,21 @@ const App = () => {
 
   if (isSocialBanner) {
     return <SocialBanner />;
+  }
+
+  if (isSpeedOverlay) {
+    return (
+      <div className="w-screen h-screen flex items-center justify-center" style={{ background: 'transparent' }}>
+        <div className="transform scale-150">
+          <SpeedGauge
+            speed={speed}
+            totalKm={totalKm}
+            weather={{ temp: '22°C', condition: 'Clear', wind: '5 km/h' }}
+            location={{ city: location.city, sector: location.sector }}
+          />
+        </div>
+      </div>
+    );
   }
 
   const formatTime = (date: Date) => {
@@ -169,12 +282,25 @@ const App = () => {
                         <span className="font-orbitron text-2xl font-bold text-white drop-shadow-md">9</span>
                     </div>
 
-                    <div className="flex justify-between items-center">
+                    <div className="flex justify-between items-center mb-3">
                         <div className="flex items-center gap-3">
                             <TrendingUp className="text-green-400 w-5 h-5 drop-shadow-[0_0_5px_rgba(74,222,128,0.8)]" />
                             <span className="font-rajdhani font-bold text-gray-400 text-lg uppercase tracking-wider">Earnings</span>
                         </div>
                         <span className="font-orbitron text-3xl font-bold text-green-400 text-glow-green">€35.12</span>
+                    </div>
+
+                    <div className="flex justify-between items-center">
+                        <div className="flex items-center gap-3">
+                            <Route className="text-cyan-400 w-5 h-5 drop-shadow-[0_0_5px_rgba(34,211,238,0.8)]" />
+                            <span className="font-rajdhani font-bold text-gray-400 text-lg uppercase tracking-wider">Total KM</span>
+                        </div>
+                        <div className="flex items-baseline gap-1">
+                          <span className="font-orbitron text-2xl font-bold text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.5)]">
+                            {totalKm < 10 ? totalKm.toFixed(2) : totalKm.toFixed(1)}
+                          </span>
+                          <span className="font-orbitron text-[10px] text-cyan-400/60 font-bold">KM</span>
+                        </div>
                     </div>
                 </div>
 

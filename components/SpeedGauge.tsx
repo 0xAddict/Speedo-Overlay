@@ -3,6 +3,7 @@ import { Cloud, MapPin, Wind } from 'lucide-react';
 
 interface SpeedGaugeProps {
   speed: number;
+  totalKm?: number;
   weather: {
     temp: string;
     condition: string;
@@ -14,7 +15,7 @@ interface SpeedGaugeProps {
   };
 }
 
-export const SpeedGauge: React.FC<SpeedGaugeProps> = ({ speed, weather, location }) => {
+export const SpeedGauge: React.FC<SpeedGaugeProps> = ({ speed, totalKm, weather, location }) => {
   const radius = 65; 
   const stroke = 8;
   const normalizedRadius = radius - stroke * 2;
@@ -111,6 +112,14 @@ export const SpeedGauge: React.FC<SpeedGaugeProps> = ({ speed, weather, location
             <span className="text-pink-500 font-orbitron text-[10px] tracking-widest font-bold mt-1 drop-shadow-md">
                 KM/H
             </span>
+            {totalKm != null && (
+              <div className="mt-2 flex items-baseline gap-1 bg-black/40 px-2 py-0.5 rounded border border-cyan-500/20">
+                <span className="font-orbitron text-xs font-bold text-cyan-400 drop-shadow-[0_0_5px_rgba(34,211,238,0.5)]">
+                  {totalKm < 10 ? totalKm.toFixed(2) : totalKm.toFixed(1)}
+                </span>
+                <span className="font-orbitron text-[8px] text-cyan-400/60 font-bold">KM</span>
+              </div>
+            )}
             </div>
         </div>
       </div>
